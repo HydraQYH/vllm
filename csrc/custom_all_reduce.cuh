@@ -35,6 +35,11 @@ struct __align__(16) RankData { const void* __restrict__ ptrs[8]; };
 
 struct __align__(16) RankSignals { volatile Signal* signals[8]; };
 
+static inline __device__ void st_flag_release(uint32_t const& flag, uint32_t* flag_addr)
+{
+  asm volatile("st.release.sys.u32 [%1], %0;" ::"r"(flag), "l"(flag_addr));
+}
+
 // like std::array, but aligned
 template <typename T, int sz>
 struct __align__(alignof(T) * sz) array_t {
@@ -159,7 +164,8 @@ DINLINE void end_sync(const RankSignals& sg, volatile Signal* self_sg,
     self_sg->start[blockIdx.x][threadIdx.x] = 0;
     // simultaneously write to the corresponding flag of all ranks.
     // Latency = 1 p2p write
-    sg.signals[threadIdx.x]->end[blockIdx.x][rank] = 1;
+    // sg.signals[threadIdx.x]->end[blockIdx.x][rank] = 1;
+    st_flag_release(1, &sg.signals[threadIdx.x]->end[blockIdx.x][rank]);
     // wait until we got true from all ranks
     while (!self_sg->end[blockIdx.x][threadIdx.x]);
   }
